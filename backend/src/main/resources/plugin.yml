@@ -1,0 +1,14 @@
+name: HopSkipRTP-Backend
+version: ${version}
+main: dev.azreyzaako.hopskiprtp.backend.HopSkipRtpBackendPlugin
+api-version: '1.21'
+author: azreyzaako
+description: Backend RTP executor for HopSkipRTP.
+commands:
+  hopskiprtp:
+    description: Admin command for HopSkipRTP backend configuration.
+    usage: /<command> reload
+permissions:
+  hopskiprtp.admin.reload:
+    description: Allows reloading HopSkipRTP on the backend.
+    default: op

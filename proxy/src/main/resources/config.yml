@@ -1,0 +1,27 @@
+shared-secret: "CHANGE_ME"
+
+permissions:
+  use: "hopskiprtp.use"
+  bypass-cooldown: "hopskiprtp.bypass.cooldown"
+  admin-reload: "hopskiprtp.admin.reload"
+
+cooldown-seconds: 60
+warmup-seconds: 5
+move-cancel-distance-blocks: 0.2
+request-timeout-seconds: 20
+debug: false
+
+allowed-backends:
+  - "backend-1"
+
+messages:
+  no-permission: "&cYou do not have permission to use /rtp."
+  not-a-player: "&cOnly players can use /rtp."
+  no-backends: "&cNo eligible backend servers are available."
+  cooldown-active: "&cYou must wait {seconds}s before using /rtp again."
+  warmup-start: "&eRTP warmup started. Do not move."
+  warmup-moved: "&cRTP cancelled because you moved."
+  request-failed: "&cRTP failed: {reason}"
+  request-timeout: "&cRTP timed out."
+  reload-success: "&aHopSkipRTP reloaded."
+  reload-failed: "&cHopSkipRTP reload failed: {reason}"
