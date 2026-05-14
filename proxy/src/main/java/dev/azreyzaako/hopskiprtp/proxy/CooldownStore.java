@@ -31,7 +31,10 @@ final class CooldownStore {
         }
         try {
             Yaml yaml = new Yaml();
-            Map<String, Object> root = yaml.load(Files.newInputStream(storePath));
+            Map<String, Object> root;
+            try (java.io.InputStream input = Files.newInputStream(storePath)) {
+                root = yaml.load(input);
+            }
             if (root == null) {
                 return;
             }
@@ -58,6 +61,7 @@ final class CooldownStore {
 
     void save() {
         try {
+            Files.createDirectories(storePath.getParent());
             long now = System.currentTimeMillis();
             Map<String, Long> toSave = new java.util.HashMap<>();
             cooldowns.forEach((id, expires) -> {

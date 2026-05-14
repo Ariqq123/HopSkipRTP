@@ -10,5 +10,9 @@ dependencies {
 }
 
 tasks.jar {
+    archiveBaseName = 'HopSkipRTP-velocity'
+}
+
+tasks.jar {
     from project(':common').sourceSets.main.output
 }

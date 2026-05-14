@@ -16,10 +16,6 @@ public final class HopSkipRtpBackendPlugin extends JavaPlugin {
         saveDefaultConfig();
         reloadRuntimeConfig();
 
-        if (config.auditLogging()) {
-            this.auditLogger = new AuditLogger(getDataFolder().toPath());
-        }
-
         teleportSessionManager = new TeleportSessionManager(this);
         getServer().getPluginManager().registerEvents(teleportSessionManager, this);
         getServer().getMessenger().registerIncomingPluginChannel(this, RtpProtocol.CHANNEL, teleportSessionManager);
@@ -49,6 +45,7 @@ public final class HopSkipRtpBackendPlugin extends JavaPlugin {
     void reloadRuntimeConfig() {
         reloadConfig();
         this.config = BackendConfig.load(this);
+        this.auditLogger = config.auditLogging() ? new AuditLogger(getDataFolder().toPath()) : null;
     }
 
     AuditLogger auditLogger() {

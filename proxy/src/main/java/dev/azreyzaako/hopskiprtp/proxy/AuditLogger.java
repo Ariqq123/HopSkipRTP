@@ -3,6 +3,7 @@ package dev.azreyzaako.hopskiprtp.proxy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -15,6 +16,7 @@ import java.util.UUID;
  */
 final class AuditLogger {
 
+    private static final long MAX_BYTES = 1_048_576L;
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter
         .ofPattern("yyyy-MM-dd HH:mm:ss")
         .withZone(ZoneId.systemDefault());
@@ -23,6 +25,11 @@ final class AuditLogger {
 
     AuditLogger(Path dataDirectory) {
         this.logFile = dataDirectory.resolve("audit.log");
+        try {
+            Files.createDirectories(dataDirectory);
+        } catch (IOException e) {
+            // Logging must stay best-effort.
+        }
     }
 
     void logRequest(UUID playerId, String playerName, String targetServer, boolean allowed) {
@@ -45,14 +52,28 @@ final class AuditLogger {
             TIMESTAMP.format(Instant.now()), playerName, playerId, remainingSeconds));
     }
 
-    private void write(String line) {
+    private synchronized void write(String line) {
         try {
+            rotateIfNecessary();
             Files.writeString(logFile, line + "\n",
                 StandardOpenOption.CREATE,
                 StandardOpenOption.APPEND);
         } catch (IOException e) {
             // Audit logging should never break the main flow
-            // In production you might want to log this to stderr
         }
+    }
+
+    private void rotateIfNecessary() throws IOException {
+        if (Files.notExists(logFile)) {
+            return;
+        }
+
+        if (Files.size(logFile) < MAX_BYTES) {
+            return;
+        }
+
+        Path rotated = logFile.resolveSibling(logFile.getFileName().toString() + ".1");
+        Files.deleteIfExists(rotated);
+        Files.move(logFile, rotated, StandardCopyOption.REPLACE_EXISTING);
     }
 }

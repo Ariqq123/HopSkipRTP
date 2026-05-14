@@ -42,7 +42,7 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.yaml.snakeyaml.Yaml;
 import org.slf4j.Logger;
 
-@Plugin(id = "hopskiprtp", name = "HopSkipRTP", version = "0.1.0", authors = {"azreyzaako"})
+@Plugin(id = "hopskiprtp", name = "HopSkipRTP", version = "0.1.1", authors = {"azreyzaako"})
 public final class HopSkipRtpProxyPlugin {
 
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from(RtpProtocol.CHANNEL);
@@ -178,7 +178,7 @@ public final class HopSkipRtpProxyPlugin {
         }
 
         if (rateLimiter != null && !rateLimiter.tryAcquire(player.getUniqueId())) {
-            player.sendMessage(Component.text("&cRTP rate limit exceeded. Please try again later."));
+            player.sendMessage(message("&cRTP rate limit exceeded. Please try again later."));
             metrics.incrementRateLimited();
             if (auditLogger != null) {
                 auditLogger.logRateLimit(player.getUniqueId(), player.getUsername());

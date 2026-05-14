@@ -4,7 +4,6 @@ import dev.azreyzaako.hopskiprtp.common.RtpCodec;
 import dev.azreyzaako.hopskiprtp.common.RtpRequest;
 import dev.azreyzaako.hopskiprtp.common.RtpResponse;
 import java.util.Collection;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Map;
@@ -13,7 +12,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
 import org.bukkit.block.Block;
@@ -29,23 +27,6 @@ import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.bukkit.scheduler.BukkitTask;
 
 final class TeleportSessionManager implements Listener, PluginMessageListener {
-
-    private static final EnumSet<Material> UNSAFE_GROUND = EnumSet.of(
-        Material.CACTUS,
-        Material.MAGMA_BLOCK,
-        Material.FIRE,
-        Material.SOUL_FIRE,
-        Material.CAMPFIRE,
-        Material.SOUL_CAMPFIRE,
-        Material.POINTED_DRIPSTONE,
-        Material.SWEET_BERRY_BUSH,
-        Material.WITHER_ROSE,
-        Material.LAVA,
-        Material.POWDER_SNOW,
-        Material.NETHER_PORTAL,
-        Material.END_PORTAL,
-        Material.BARRIER
-    );
 
     private final HopSkipRtpBackendPlugin plugin;
     private final Map<UUID, TeleportSession> sessionsByRequestId = new ConcurrentHashMap<>();
@@ -73,7 +54,14 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
             return;
         }
 
-        if (!isWorldAllowed(player.getWorld(), config)) {
+        if (!TeleportSafetyRules.isWorldAllowed(
+            player.getWorld().getName(),
+            player.getWorld().getEnvironment(),
+            config.allowedWorlds(),
+            config.allowNether(),
+            config.allowEnd()
+        )) {
+            logDenied(player, "world-not-allowed");
             sendFailure(player, request.requestId(), config.messages().requestDenied());
             return;
         }
@@ -174,7 +162,8 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
         }
 
         World world = player.getWorld();
-        if (!isWorldAllowed(world, plugin.config())) {
+        if (!TeleportSafetyRules.isWorldAllowed(world.getName(), world.getEnvironment(), plugin.config().allowedWorlds(), plugin.config().allowNether(), plugin.config().allowEnd())) {
+            logDenied(player, "world-not-allowed");
             sendFailure(player, session.requestId(), plugin.config().messages().requestDenied());
             logAudit(player, world.getName(), 0, 0, false, "world-not-allowed");
             return;
@@ -217,6 +206,7 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
         Player player = Bukkit.getPlayer(session.playerId());
         if (player != null && player.isOnline()) {
             sendFailure(player, session.requestId(), reason);
+            logDenied(player, reason);
         }
     }
 
@@ -241,23 +231,6 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
                 new RtpResponse(requestId, player.getUniqueId(), success, message)
             )
         );
-    }
-
-    private boolean isWorldAllowed(World world, BackendConfig config) {
-        if (!config.allowedWorlds().contains(world.getName())) {
-            return false;
-        }
-
-        switch (world.getEnvironment()) {
-            case NORMAL:
-                return true;
-            case NETHER:
-                return config.allowNether();
-            case THE_END:
-                return config.allowEnd();
-            default:
-                return false;
-        }
     }
 
     private Location findSafeLocation(World world, BackendConfig config, Player player) {
@@ -295,7 +268,7 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
             if (!biomeBlacklist.isEmpty()) {
                 org.bukkit.block.Biome biome = world.getBiome(x, groundY, z);
                 String biomeName = biome.getKey().getKey().toUpperCase(java.util.Locale.ROOT);
-                if (biomeBlacklist.stream().map(String::toUpperCase).anyMatch(biomeName::equals)) {
+                if (!TeleportSafetyRules.isBiomeAllowed(biomeName, biomeBlacklist)) {
                     continue;
                 }
             }
@@ -304,7 +277,7 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
             Block feet = world.getBlockAt(x, groundY + 1, z);
             Block head = world.getBlockAt(x, groundY + 2, z);
 
-            if (!isSafeGround(ground) || !feet.isPassable() || !head.isPassable()) {
+            if (!TeleportSafetyRules.isSafeGround(ground.getType()) || !feet.isPassable() || !head.isPassable()) {
                 continue;
             }
 
@@ -312,11 +285,6 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
         }
 
         return null;
-    }
-
-    private boolean isSafeGround(Block block) {
-        Material type = block.getType();
-        return type.isSolid() && !UNSAFE_GROUND.contains(type);
     }
 
     private static final class TeleportSession {
@@ -366,6 +334,13 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
 
         private boolean markFinished() {
             return finished.compareAndSet(false, true);
+        }
+    }
+
+    private void logDenied(Player player, String reason) {
+        AuditLogger logger = plugin.auditLogger();
+        if (logger != null) {
+            logger.logDenied(player.getUniqueId(), player.getName(), reason);
         }
     }
 }

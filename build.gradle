@@ -4,7 +4,7 @@ plugins {
 
 allprojects {
     group = 'dev.azreyzaako'
-    version = '0.1.0'
+    version = '0.1.1'
 }
 
 subprojects {
@@ -27,5 +27,13 @@ subprojects {
     tasks.withType(JavaCompile).configureEach {
         options.encoding = 'UTF-8'
         options.release = 21
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+
+    dependencies {
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     }
 }

@@ -51,11 +51,7 @@ final class RateLimiter {
 
     void cleanup() {
         long now = System.nanoTime();
-        playerBuckets.entrySet().removeIf(entry -> {
-            PlayerBucket bucket = entry.getValue();
-            long elapsedSeconds = (now - bucket.lastRefillNanos) / 1_000_000_000L;
-            return elapsedSeconds > 60 && bucket.tokens.get() >= bucket.burst;
-        });
+        playerBuckets.entrySet().removeIf(entry -> (now - entry.getValue().lastRefillNanos) > 60_000_000_000L);
     }
 
     private void refillGlobal() {
