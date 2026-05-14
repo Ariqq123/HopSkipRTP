@@ -1,0 +1,17 @@
+shared-secret: "CHANGE_ME"
+
+allowed-worlds:
+  - "world"
+
+search-radius: 5000
+search-attempts: 32
+allow-nether: false
+allow-end: false
+debug: false
+
+messages:
+  reload-success: "&aHopSkipRTP backend reloaded."
+  reload-failed: "&cHopSkipRTP backend reload failed: {reason}"
+  request-denied: "&cRTP is not enabled in this world."
+  no-safe-location: "&cNo safe teleport location was found."
+  warmup-moved: "&cRTP cancelled because you moved."

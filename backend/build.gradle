@@ -1,0 +1,23 @@
+plugins {
+    id 'java'
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    implementation project(':common')
+}
+
+processResources {
+    def props = [
+        version: project.version
+    ]
+    inputs.properties(props)
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(props)
+    }
+}
+
+tasks.jar {
+    from project(':common').sourceSets.main.output
+}
