@@ -2,7 +2,7 @@
 
 ## Proxy Config
 
-- `shared-secret`: must match the backend
+- `shared-secret`: auto-generated on first proxy start if left as `CHANGE_ME`
 - `allowed-backends`: Velocity server names allowed for RTP
 - `cooldown-seconds`: per-player cooldown after success
 - `warmup-seconds`: delay before dispatch
@@ -12,7 +12,7 @@
 
 ## Backend Config
 
-- `shared-secret`: must match the proxy
+- `shared-secret`: must match the proxy-generated value
 - `allowed-worlds`: worlds allowed for RTP
 - `search-radius`: search area around the player
 - `search-attempts`: how many safe spots to try
@@ -25,3 +25,7 @@
 
 - Proxy: `/hopskiprtp reload`
 - Backend: `/hopskiprtp reload`
+
+## Shared Secret
+
+- [How the shared secret is generated](Shared-Secret)

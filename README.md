@@ -18,9 +18,10 @@ Proxy-aware RTP for Velocity + Paper, built with Java 21 and the Gradle Wrapper.
 
 1. Build with `./gradlew clean build`.
 2. Put `proxy/build/libs/HopSkipRTP-velocity-0.1.1.jar` in Velocity.
-3. Put `backend/build/libs/HopSkipRTP-paper-0.1.1.jar` in each Paper backend.
-4. Set the same `shared-secret` in both configs.
-5. Add your backend names to `allowed-backends` and `allowed-worlds`.
+3. Start the proxy once so it generates `shared-secret` in `proxy/config.yml`.
+4. Copy that same `shared-secret` into each backend `config.yml`.
+5. Put `backend/build/libs/HopSkipRTP-paper-0.1.1.jar` in each Paper backend.
+6. Add your backend names to `allowed-backends` and `allowed-worlds`.
 
 ## Commands
 
@@ -39,6 +40,7 @@ Proxy-aware RTP for Velocity + Paper, built with Java 21 and the Gradle Wrapper.
 - Proxy config: `proxy/src/main/resources/config.yml`
 - Backend config: `backend/src/main/resources/config.yml`
 - Shared protocol: `common/src/main/java/dev/azreyzaako/hopskiprtp/common`
+- Secret bootstrap: proxy generates the first `shared-secret` and writes it back to its config.
 
 ## Wiki
 

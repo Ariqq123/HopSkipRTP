@@ -4,13 +4,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
+import java.util.HexFormat;
 import org.yaml.snakeyaml.Yaml;
 
 final class ProxyConfig {
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final HexFormat HEX = HexFormat.of();
+
     private final String sharedSecret;
+    private final boolean sharedSecretGenerated;
     private final Permissions permissions;
     private final int cooldownSeconds;
     private final int warmupSeconds;
@@ -27,6 +33,7 @@ final class ProxyConfig {
 
     private ProxyConfig(
         String sharedSecret,
+        boolean sharedSecretGenerated,
         Permissions permissions,
         int cooldownSeconds,
         int warmupSeconds,
@@ -42,6 +49,7 @@ final class ProxyConfig {
         boolean auditLogging
     ) {
         this.sharedSecret = sharedSecret;
+        this.sharedSecretGenerated = sharedSecretGenerated;
         this.permissions = permissions;
         this.cooldownSeconds = cooldownSeconds;
         this.warmupSeconds = warmupSeconds;
@@ -80,8 +88,12 @@ final class ProxyConfig {
         }
 
         String sharedSecret = readString(root, "shared-secret");
+        boolean generatedSharedSecret = false;
         if (sharedSecret.isBlank() || "CHANGE_ME".equals(sharedSecret)) {
-            throw new IOException("Set a real shared-secret in proxy/config.yml.");
+            sharedSecret = generateSharedSecret();
+            root.put("shared-secret", sharedSecret);
+            saveYaml(configPath, root);
+            generatedSharedSecret = true;
         }
 
         List<String> allowedBackends = readStringList(root, "allowed-backends");
@@ -110,6 +122,7 @@ final class ProxyConfig {
 
         return new ProxyConfig(
             sharedSecret,
+            generatedSharedSecret,
             permissions,
             readInt(root, "cooldown-seconds", 60),
             readInt(root, "warmup-seconds", 5),
@@ -128,6 +141,10 @@ final class ProxyConfig {
 
     String sharedSecret() {
         return sharedSecret;
+    }
+
+    boolean sharedSecretGenerated() {
+        return sharedSecretGenerated;
     }
 
     Permissions permissions() {
@@ -266,6 +283,18 @@ final class ProxyConfig {
             return Boolean.parseBoolean(value.toString().trim());
         }
         return defaultValue;
+    }
+
+    private static String generateSharedSecret() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return HEX.formatHex(bytes);
+    }
+
+    private static void saveYaml(Path path, Map<String, Object> root) throws IOException {
+        Yaml yaml = new Yaml();
+        String rendered = yaml.dump(root);
+        Files.writeString(path, rendered);
     }
 
     record Permissions(String use, String bypassCooldown, String adminReload) {

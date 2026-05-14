@@ -1,3 +1,4 @@
+# Generated on first run if left as CHANGE_ME.
 shared-secret: "CHANGE_ME"
 
 permissions:

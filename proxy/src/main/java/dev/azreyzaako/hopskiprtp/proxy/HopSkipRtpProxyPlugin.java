@@ -260,6 +260,9 @@ public final class HopSkipRtpProxyPlugin {
             } else {
                 this.auditLogger = null;
             }
+            if (loaded.sharedSecretGenerated()) {
+                logger.info("Generated proxy shared-secret on first run and saved it to config.yml. Copy the same value into backend/config.yml.");
+            }
             if (loaded.debug()) {
                 logger.info("HopSkipRTP proxy config loaded with debug enabled.");
             }

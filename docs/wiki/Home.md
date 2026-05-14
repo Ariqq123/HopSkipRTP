@@ -6,6 +6,7 @@ HopSkipRTP is a Velocity + Paper RTP bridge.
 
 - [Installation](Installation)
 - [Configuration](Configuration)
+- [Shared Secret](Shared-Secret)
 - [Commands](Commands)
 - [Architecture](Architecture)
 - [Troubleshooting](Troubleshooting)

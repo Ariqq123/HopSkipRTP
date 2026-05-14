@@ -1,3 +1,4 @@
+# Must match the proxy-generated shared-secret.
 shared-secret: "CHANGE_ME"
 
 allowed-worlds:
