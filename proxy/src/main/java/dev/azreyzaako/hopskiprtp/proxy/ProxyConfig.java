@@ -19,6 +19,11 @@ final class ProxyConfig {
     private final boolean debug;
     private final List<String> allowedBackends;
     private final Messages messages;
+    private final int rateLimitGlobalBurst;
+    private final int rateLimitGlobalRefillPerSecond;
+    private final int rateLimitPlayerBurst;
+    private final int rateLimitPlayerRefillPerSecond;
+    private final boolean auditLogging;
 
     private ProxyConfig(
         String sharedSecret,
@@ -29,7 +34,12 @@ final class ProxyConfig {
         int requestTimeoutSeconds,
         boolean debug,
         List<String> allowedBackends,
-        Messages messages
+        Messages messages,
+        int rateLimitGlobalBurst,
+        int rateLimitGlobalRefillPerSecond,
+        int rateLimitPlayerBurst,
+        int rateLimitPlayerRefillPerSecond,
+        boolean auditLogging
     ) {
         this.sharedSecret = sharedSecret;
         this.permissions = permissions;
@@ -40,6 +50,11 @@ final class ProxyConfig {
         this.debug = debug;
         this.allowedBackends = allowedBackends;
         this.messages = messages;
+        this.rateLimitGlobalBurst = rateLimitGlobalBurst;
+        this.rateLimitGlobalRefillPerSecond = rateLimitGlobalRefillPerSecond;
+        this.rateLimitPlayerBurst = rateLimitPlayerBurst;
+        this.rateLimitPlayerRefillPerSecond = rateLimitPlayerRefillPerSecond;
+        this.auditLogging = auditLogging;
     }
 
     static ProxyConfig load(Path dataDirectory) throws IOException {
@@ -102,7 +117,12 @@ final class ProxyConfig {
             readInt(root, "request-timeout-seconds", 20),
             readBoolean(root, "debug", false),
             allowedBackends,
-            messages
+            messages,
+            readNestedInt(root, "rate-limit", "global-burst", 100),
+            readNestedInt(root, "rate-limit", "global-refill-per-second", 50),
+            readNestedInt(root, "rate-limit", "player-burst", 3),
+            readNestedInt(root, "rate-limit", "player-refill-per-second", 1),
+            readBoolean(root, "audit-logging", true)
         );
     }
 
@@ -140,6 +160,26 @@ final class ProxyConfig {
 
     Messages messages() {
         return messages;
+    }
+
+    int rateLimitGlobalBurst() {
+        return rateLimitGlobalBurst;
+    }
+
+    int rateLimitGlobalRefillPerSecond() {
+        return rateLimitGlobalRefillPerSecond;
+    }
+
+    int rateLimitPlayerBurst() {
+        return rateLimitPlayerBurst;
+    }
+
+    int rateLimitPlayerRefillPerSecond() {
+        return rateLimitPlayerRefillPerSecond;
+    }
+
+    boolean auditLogging() {
+        return auditLogging;
     }
 
     private static String readString(Map<String, Object> root, String key) {
@@ -198,6 +238,21 @@ final class ProxyConfig {
         }
         if (value != null) {
             return Double.parseDouble(value.toString().trim());
+        }
+        return defaultValue;
+    }
+
+    private static int readNestedInt(Map<String, Object> root, String parent, String key, int defaultValue) {
+        Object value = root.get(parent);
+        if (!(value instanceof Map<?, ?> map)) {
+            return defaultValue;
+        }
+        Object nested = map.get(key);
+        if (nested instanceof Number number) {
+            return number.intValue();
+        }
+        if (nested != null) {
+            return Integer.parseInt(nested.toString().trim());
         }
         return defaultValue;
     }

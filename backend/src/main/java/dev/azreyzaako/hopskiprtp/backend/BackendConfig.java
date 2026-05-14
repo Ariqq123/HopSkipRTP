@@ -14,6 +14,9 @@ final class BackendConfig {
     private final boolean allowEnd;
     private final boolean debug;
     private final Messages messages;
+    private final List<String> biomeBlacklist;
+    private final int spawnProtectionRadius;
+    private final boolean auditLogging;
 
     private BackendConfig(
         String sharedSecret,
@@ -23,7 +26,10 @@ final class BackendConfig {
         boolean allowNether,
         boolean allowEnd,
         boolean debug,
-        Messages messages
+        Messages messages,
+        List<String> biomeBlacklist,
+        int spawnProtectionRadius,
+        boolean auditLogging
     ) {
         this.sharedSecret = sharedSecret;
         this.allowedWorlds = allowedWorlds;
@@ -33,6 +39,9 @@ final class BackendConfig {
         this.allowEnd = allowEnd;
         this.debug = debug;
         this.messages = messages;
+        this.biomeBlacklist = biomeBlacklist;
+        this.spawnProtectionRadius = spawnProtectionRadius;
+        this.auditLogging = auditLogging;
     }
 
     static BackendConfig load(HopSkipRtpBackendPlugin plugin) {
@@ -46,6 +55,8 @@ final class BackendConfig {
         if (allowedWorlds.isEmpty()) {
             throw new IllegalStateException("Add at least one world name to allowed-worlds.");
         }
+
+        List<String> biomeBlacklist = config.getStringList("biome-blacklist");
 
         return new BackendConfig(
             sharedSecret,
@@ -62,7 +73,10 @@ final class BackendConfig {
                 config.getString("messages.no-safe-location", "&cNo safe teleport location was found."),
                 config.getString("messages.warmup-moved", "&cRTP cancelled because you moved."),
                 config.getString("messages.success", "&aRTP complete.")
-            )
+            ),
+            biomeBlacklist,
+            config.getInt("spawn-protection-radius", 500),
+            config.getBoolean("audit-logging", true)
         );
     }
 
@@ -100,6 +114,18 @@ final class BackendConfig {
 
     Messages messages() {
         return messages;
+    }
+
+    List<String> biomeBlacklist() {
+        return biomeBlacklist;
+    }
+
+    int spawnProtectionRadius() {
+        return spawnProtectionRadius;
+    }
+
+    boolean auditLogging() {
+        return auditLogging;
     }
 
     record Messages(

@@ -9,11 +9,16 @@ public final class HopSkipRtpBackendPlugin extends JavaPlugin {
 
     private BackendConfig config;
     private TeleportSessionManager teleportSessionManager;
+    private AuditLogger auditLogger;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         reloadRuntimeConfig();
+
+        if (config.auditLogging()) {
+            this.auditLogger = new AuditLogger(getDataFolder().toPath());
+        }
 
         teleportSessionManager = new TeleportSessionManager(this);
         getServer().getPluginManager().registerEvents(teleportSessionManager, this);
@@ -44,6 +49,10 @@ public final class HopSkipRtpBackendPlugin extends JavaPlugin {
     void reloadRuntimeConfig() {
         reloadConfig();
         this.config = BackendConfig.load(this);
+    }
+
+    AuditLogger auditLogger() {
+        return auditLogger;
     }
 
     void reloadFromCommand(org.bukkit.command.CommandSender sender) {

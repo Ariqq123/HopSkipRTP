@@ -5,6 +5,7 @@ import dev.azreyzaako.hopskiprtp.common.RtpRequest;
 import dev.azreyzaako.hopskiprtp.common.RtpResponse;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Map;
 import java.util.UUID;
@@ -175,22 +176,33 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
         World world = player.getWorld();
         if (!isWorldAllowed(world, plugin.config())) {
             sendFailure(player, session.requestId(), plugin.config().messages().requestDenied());
+            logAudit(player, world.getName(), 0, 0, false, "world-not-allowed");
             return;
         }
 
         Location destination = findSafeLocation(world, plugin.config(), player);
         if (destination == null) {
             sendFailure(player, session.requestId(), plugin.config().messages().noSafeLocation());
+            logAudit(player, world.getName(), 0, 0, false, "no-safe-location");
             return;
         }
 
         boolean teleported = player.teleport(destination);
         if (!teleported) {
             sendFailure(player, session.requestId(), "Teleport failed.");
+            logAudit(player, world.getName(), destination.getBlockX(), destination.getBlockZ(), false, "teleport-failed");
             return;
         }
 
         sendSuccess(player, session.requestId(), plugin.config().messages().success());
+        logAudit(player, world.getName(), destination.getBlockX(), destination.getBlockZ(), true, "success");
+    }
+
+    private void logAudit(Player player, String worldName, int x, int z, boolean success, String reason) {
+        AuditLogger logger = plugin.auditLogger();
+        if (logger != null) {
+            logger.logTeleport(player.getUniqueId(), player.getName(), worldName, x, z, success, reason);
+        }
     }
 
     private void cancelSession(TeleportSession session, String reason) {
@@ -252,6 +264,9 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
         int radius = Math.max(1, config.searchRadius());
         int attempts = Math.max(1, config.searchAttempts());
         WorldBorder border = world.getWorldBorder();
+        Location spawn = world.getSpawnLocation();
+        int spawnProtection = Math.max(0, config.spawnProtectionRadius());
+        List<String> biomeBlacklist = config.biomeBlacklist();
 
         for (int attempt = 0; attempt < attempts; attempt++) {
             int x = java.util.concurrent.ThreadLocalRandom.current().nextInt(-radius, radius + 1);
@@ -261,9 +276,28 @@ final class TeleportSessionManager implements Listener, PluginMessageListener {
                 continue;
             }
 
+            // Spawn protection check
+            if (spawnProtection > 0 && spawn != null && spawn.getWorld() != null
+                && spawn.getWorld().equals(world)) {
+                double dx = x - spawn.getBlockX();
+                double dz = z - spawn.getBlockZ();
+                if (dx * dx + dz * dz <= (long) spawnProtection * spawnProtection) {
+                    continue;
+                }
+            }
+
             int groundY = world.getHighestBlockYAt(x, z);
             if (groundY <= world.getMinHeight() || groundY >= world.getMaxHeight() - 2) {
                 continue;
+            }
+
+            // Biome blacklist check
+            if (!biomeBlacklist.isEmpty()) {
+                org.bukkit.block.Biome biome = world.getBiome(x, groundY, z);
+                String biomeName = biome.getKey().getKey().toUpperCase(java.util.Locale.ROOT);
+                if (biomeBlacklist.stream().map(String::toUpperCase).anyMatch(biomeName::equals)) {
+                    continue;
+                }
             }
 
             Block ground = world.getBlockAt(x, groundY, z);

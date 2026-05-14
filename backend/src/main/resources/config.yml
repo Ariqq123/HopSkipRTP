@@ -9,6 +9,15 @@ allow-nether: false
 allow-end: false
 debug: false
 
+biome-blacklist:
+  - "OCEAN"
+  - "DEEP_OCEAN"
+  - "RIVER"
+
+spawn-protection-radius: 500
+
+audit-logging: true
+
 messages:
   reload-success: "&aHopSkipRTP backend reloaded."
   reload-failed: "&cHopSkipRTP backend reload failed: {reason}"

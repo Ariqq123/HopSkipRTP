@@ -11,6 +11,14 @@ move-cancel-distance-blocks: 0.2
 request-timeout-seconds: 20
 debug: false
 
+rate-limit:
+  global-burst: 100
+  global-refill-per-second: 50
+  player-burst: 3
+  player-refill-per-second: 1
+
+audit-logging: true
+
 allowed-backends:
   - "backend-1"
 

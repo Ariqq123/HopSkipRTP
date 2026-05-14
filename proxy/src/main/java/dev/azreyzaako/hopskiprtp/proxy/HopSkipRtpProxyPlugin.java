@@ -54,21 +54,27 @@ public final class HopSkipRtpProxyPlugin {
 
     private final Map<UUID, PendingTeleport> pendingByRequestId = new ConcurrentHashMap<>();
     private final Map<UUID, PendingTeleport> pendingByPlayerId = new ConcurrentHashMap<>();
-    private final Map<UUID, CooldownEntry> cooldowns = new ConcurrentHashMap<>();
+    private final CooldownStore cooldownStore;
+    private final Metrics metrics = new Metrics();
+    private RateLimiter rateLimiter;
+    private AuditLogger auditLogger;
 
     private volatile ProxyConfig config;
     private volatile ScheduledTask cooldownCleanupTask;
+    private volatile ScheduledTask rateLimitCleanupTask;
 
     @Inject
     public HopSkipRtpProxyPlugin(ProxyServer proxyServer, Logger logger, @DataDirectory Path dataDirectory) {
         this.proxyServer = proxyServer;
         this.logger = logger;
         this.dataDirectory = dataDirectory;
+        this.cooldownStore = new CooldownStore(dataDirectory);
     }
 
     @Subscribe
     public void onProxyInitialize(ProxyInitializeEvent event) {
         reloadConfiguration();
+        cooldownStore.load();
 
         CommandManager commandManager = proxyServer.getCommandManager();
         commandManager.register(
@@ -84,7 +90,12 @@ public final class HopSkipRtpProxyPlugin {
             .repeat(1, TimeUnit.MINUTES)
             .schedule();
 
-        logger.info("HopSkipRTP proxy enabled.");
+        rateLimitCleanupTask = proxyServer.getScheduler()
+            .buildTask(this, this::cleanupRateLimiters)
+            .repeat(5, TimeUnit.MINUTES)
+            .schedule();
+
+        logger.info("HopSkipRTP proxy enabled. Loaded {} persisted cooldowns.", cooldownStore.size());
     }
 
     @Subscribe
@@ -141,6 +152,9 @@ public final class HopSkipRtpProxyPlugin {
         if (cooldownCleanupTask != null) {
             cooldownCleanupTask.cancel();
         }
+        if (rateLimitCleanupTask != null) {
+            rateLimitCleanupTask.cancel();
+        }
         pendingByRequestId.values().forEach(pending -> {
             if (pending.timeoutTask() != null) {
                 pending.timeoutTask().cancel();
@@ -148,7 +162,7 @@ public final class HopSkipRtpProxyPlugin {
         });
         pendingByRequestId.clear();
         pendingByPlayerId.clear();
-        cooldowns.clear();
+        cooldownStore.save();
     }
 
     public void requestTeleport(Player player) {
@@ -163,13 +177,29 @@ public final class HopSkipRtpProxyPlugin {
             return;
         }
 
+        if (rateLimiter != null && !rateLimiter.tryAcquire(player.getUniqueId())) {
+            player.sendMessage(Component.text("&cRTP rate limit exceeded. Please try again later."));
+            metrics.incrementRateLimited();
+            if (auditLogger != null) {
+                auditLogger.logRateLimit(player.getUniqueId(), player.getUsername());
+            }
+            return;
+        }
+
         if (!player.hasPermission(currentConfig.permissions().bypassCooldown())) {
             Optional<Duration> remaining = getCooldownRemaining(player.getUniqueId());
             if (remaining.isPresent()) {
-                player.sendMessage(message(currentConfig.messages().cooldownActive(), "seconds", String.valueOf(Math.max(1, remaining.get().toSeconds()))));
+                long seconds = Math.max(1, remaining.get().toSeconds());
+                player.sendMessage(message(currentConfig.messages().cooldownActive(), "seconds", String.valueOf(seconds)));
+                metrics.incrementCooldownBlocked();
+                if (auditLogger != null) {
+                    auditLogger.logCooldown(player.getUniqueId(), player.getUsername(), seconds);
+                }
                 return;
             }
         }
+
+        metrics.incrementRequests();
 
         Optional<RegisteredServer> targetServer = selectTargetServer(player);
         if (targetServer.isEmpty()) {
@@ -219,6 +249,17 @@ public final class HopSkipRtpProxyPlugin {
         try {
             ProxyConfig loaded = ProxyConfig.load(dataDirectory);
             this.config = loaded;
+            this.rateLimiter = new RateLimiter(
+                loaded.rateLimitGlobalBurst(),
+                loaded.rateLimitGlobalRefillPerSecond(),
+                loaded.rateLimitPlayerBurst(),
+                loaded.rateLimitPlayerRefillPerSecond()
+            );
+            if (loaded.auditLogging()) {
+                this.auditLogger = new AuditLogger(dataDirectory);
+            } else {
+                this.auditLogger = null;
+            }
             if (loaded.debug()) {
                 logger.info("HopSkipRTP proxy config loaded with debug enabled.");
             }
@@ -284,13 +325,21 @@ public final class HopSkipRtpProxyPlugin {
         }
 
         if (response.success()) {
-            cooldowns.put(player.getUniqueId(), new CooldownEntry(System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(requireConfig().cooldownSeconds())));
+            cooldownStore.put(player.getUniqueId(), System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(requireConfig().cooldownSeconds()));
             player.sendMessage(message(response.message()));
+            metrics.incrementSuccess();
+            if (auditLogger != null) {
+                auditLogger.logResult(player.getUniqueId(), player.getUsername(), pending.targetServer(), true, "success");
+            }
             if (config.debug()) {
                 logger.debug("RTP success for {} on {}.", player.getUsername(), pending.targetServer());
             }
         } else {
             player.sendMessage(message(requireConfig().messages().requestFailed(), "reason", response.message()));
+            metrics.incrementFailure();
+            if (auditLogger != null) {
+                auditLogger.logResult(player.getUniqueId(), player.getUsername(), pending.targetServer(), false, response.message());
+            }
             if (config.debug()) {
                 logger.debug("RTP failed for {} on {}: {}", player.getUsername(), pending.targetServer(), response.message());
             }
@@ -319,6 +368,9 @@ public final class HopSkipRtpProxyPlugin {
             return;
         }
 
+        if (auditLogger != null) {
+            auditLogger.logRequest(player.getUniqueId(), player.getUsername(), server.getServerInfo().getName(), true);
+        }
         if (config.debug()) {
             logger.debug("Dispatched RTP request {} for {} to {}.", pending.requestId(), player.getUsername(), server.getServerInfo().getName());
         }
@@ -346,23 +398,17 @@ public final class HopSkipRtpProxyPlugin {
     }
 
     private Optional<Duration> getCooldownRemaining(UUID playerId) {
-        CooldownEntry entry = cooldowns.get(playerId);
-        if (entry == null) {
-            return Optional.empty();
-        }
-
-        long remainingMillis = entry.expiresAtMillis() - System.currentTimeMillis();
-        if (remainingMillis <= 0) {
-            cooldowns.remove(playerId);
-            return Optional.empty();
-        }
-
-        return Optional.of(Duration.ofMillis(remainingMillis));
+        return cooldownStore.getRemaining(playerId);
     }
 
     private void purgeExpiredCooldowns() {
-        long now = System.currentTimeMillis();
-        cooldowns.entrySet().removeIf(entry -> entry.getValue().expiresAtMillis() <= now);
+        cooldownStore.purgeExpired();
+    }
+
+    private void cleanupRateLimiters() {
+        if (rateLimiter != null) {
+            rateLimiter.cleanup();
+        }
     }
 
     private void failPending(UUID requestId, String reason) {
@@ -375,6 +421,8 @@ public final class HopSkipRtpProxyPlugin {
         if (pending.timeoutTask() != null) {
             pending.timeoutTask().cancel();
         }
+
+        metrics.incrementFailure();
 
         Player player = proxyServer.getPlayer(pending.playerId()).orElse(null);
         if (player != null) {
@@ -400,9 +448,6 @@ public final class HopSkipRtpProxyPlugin {
             rendered = rendered.replace("{" + entry.getKey() + "}", Objects.requireNonNullElse(entry.getValue(), ""));
         }
         return rendered;
-    }
-
-    private record CooldownEntry(long expiresAtMillis) {
     }
 
     private static final class PendingTeleport {
